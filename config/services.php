@@ -38,6 +38,7 @@ return [
     'storyblok' => [
         'api_token' => env('STORYBLOK_API_TOKEN'),
         'api_base' => env('STORYBLOK_API_BASE', 'https://api.storyblok.com/v2/cdn'),
+        'root_slug' => env('STORYBLOK_ROOT_SLUG', ''),
         'cv_slug' => env('STORYBLOK_CV_SLUG', 'cv'),
         'version' => env('STORYBLOK_VERSION', 'published'),
         'cache_ttl_seconds' => (int) env('CV_CACHE_TTL_SECONDS', 900),

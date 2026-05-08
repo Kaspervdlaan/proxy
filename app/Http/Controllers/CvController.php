@@ -76,7 +76,7 @@ class CvController extends Controller
 
             if (! Cache::has($cacheKey)) {
                 return response()->json([
-                    'message' => 'Unable to fetch CV and no cache is available.',
+                    'message' => 'Unable to fetch story and no cache is available.',
                 ], 502);
             }
 
@@ -98,7 +98,7 @@ class CvController extends Controller
         $normalized = trim($slug, '/');
 
         if ($normalized === '') {
-            return 'home';
+            return (string) config('services.storyblok.root_slug', 'home');
         }
 
         return $normalized;
