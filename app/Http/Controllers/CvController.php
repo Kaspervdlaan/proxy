@@ -16,19 +16,18 @@ class CvController extends Controller
 
     public function show(): JsonResponse
     {
-        $slug = (string) config('services.storyblok.cv_slug', 'cv');
+        $slug = $this->resolveSlug();
         $ttlSeconds = max((int) config('services.storyblok.cache_ttl_seconds', 900), 30);
-        $cacheKey = "cv:html:{$slug}";
+        $cacheKey = $this->cacheKey($slug);
 
         $fromCache = Cache::has($cacheKey);
 
         $result = Cache::remember($cacheKey, now()->addSeconds($ttlSeconds), function () use ($slug) {
             $story = $this->storyblokCvService->fetchStory($slug);
-            $html = $this->storyblokCvService->renderHtml($story);
 
             return [
                 'slug' => $slug,
-                'html' => $html,
+                'story' => $story,
                 'fetched_at' => now()->toIso8601String(),
             ];
         });
@@ -53,25 +52,26 @@ class CvController extends Controller
             ], 401);
         }
 
-        $slug = (string) config('services.storyblok.cv_slug', 'cv');
-        Cache::forget("cv:html:{$slug}");
+        $slug = $this->resolveSlug();
+        Cache::forget($this->cacheKey($slug));
 
         return response()->json([
-            'message' => 'CV cache cleared.',
+            'message' => 'Story cache cleared.',
             'slug' => $slug,
         ]);
     }
 
     public function staleSafe(): JsonResponse
     {
-        $slug = (string) config('services.storyblok.cv_slug', 'cv');
-        $cacheKey = "cv:html:{$slug}";
+        $slug = $this->resolveSlug();
+        $cacheKey = $this->cacheKey($slug);
 
         try {
             return $this->show();
         } catch (Throwable $exception) {
-            Log::warning('Serving stale CV cache after Storyblok fetch failure.', [
+            Log::warning('Serving stale story cache after Storyblok fetch failure.', [
                 'exception' => $exception->getMessage(),
+                'slug' => $slug,
             ]);
 
             if (! Cache::has($cacheKey)) {
@@ -90,5 +90,22 @@ class CvController extends Controller
                 ],
             ], 200);
         }
+    }
+
+    private function resolveSlug(): string
+    {
+        $slug = (string) request()->query('slug', config('services.storyblok.cv_slug', 'home'));
+        $normalized = trim($slug, '/');
+
+        if ($normalized === '') {
+            return 'home';
+        }
+
+        return $normalized;
+    }
+
+    private function cacheKey(string $slug): string
+    {
+        return 'story:json:'.$slug;
     }
 }
