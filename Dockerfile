@@ -7,8 +7,8 @@ FROM php:8.3-cli
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libzip-dev unzip \
-    && docker-php-ext-install pdo pdo_sqlite \
+    && apt-get install -y --no-install-recommends libzip-dev libsqlite3-dev pkg-config unzip \
+    && docker-php-ext-install pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=vendor /app/vendor ./vendor
