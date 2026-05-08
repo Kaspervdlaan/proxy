@@ -1,0 +1,28 @@
+services:
+  laravel-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-proxy
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      CACHE_STORE: file
+      STORYBLOK_API_TOKEN: ${STORYBLOK_API_TOKEN}
+      STORYBLOK_CV_SLUG: ${STORYBLOK_CV_SLUG:-cv}
+      STORYBLOK_VERSION: ${STORYBLOK_VERSION:-published}
+      CV_CACHE_TTL_SECONDS: ${CV_CACHE_TTL_SECONDS:-900}
+      CV_CACHE_BUST_TOKEN: ${CV_CACHE_BUST_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit((int)!@file_get_contents('http://127.0.0.1:8000/api/health'));" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - vibe-network
+
+networks:
+  vibe-network:
+    name: vibe-network
