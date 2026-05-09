@@ -28,6 +28,10 @@ class CvController extends Controller
                 'used' => Arr::get($result, 'cv_used'),
                 'latest' => Arr::get($result, 'cv_latest'),
             ],
+            'cache' => [
+                'hit' => (bool) Arr::get($result, 'cache_hit', false),
+                'stale' => (bool) Arr::get($result, 'cache_stale', false),
+            ],
             'fetched_at' => now()->toIso8601String(),
         ]);
     }

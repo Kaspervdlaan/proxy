@@ -35,6 +35,8 @@ class StoryblokCvService
                     'story' => $cachedStory,
                     'cv_used' => $storedCv,
                     'cv_latest' => $storedCv,
+                    'cache_hit' => true,
+                    'cache_stale' => false,
                 ];
             }
 
@@ -74,6 +76,8 @@ class StoryblokCvService
                 'story' => $story,
                 'cv_used' => $storedCv,
                 'cv_latest' => $latestCvValue,
+                'cache_hit' => false,
+                'cache_stale' => false,
             ];
         } catch (RuntimeException $exception) {
             if (! $this->shouldServeStaleOnError()) {
@@ -91,6 +95,8 @@ class StoryblokCvService
                 'cv_used' => Arr::get($staleEntry, 'cv'),
                 'cv_latest' => Arr::get($staleEntry, 'cv'),
                 'stale' => true,
+                'cache_hit' => false,
+                'cache_stale' => true,
             ];
         }
     }
