@@ -53,6 +53,7 @@ class CvController extends Controller
         ];
 
         $this->storyblokCvService->invalidateStoryContentCacheBySlug($slug);
+        $this->storyblokCvService->clearStoredCacheVersion();
 
         $revalidate = $this->notifyNextRevalidate($revalidatePayload);
 
@@ -99,6 +100,7 @@ class CvController extends Controller
         ];
 
         $this->storyblokCvService->invalidateStoryContentCacheBySlug($slug);
+        $this->storyblokCvService->clearStoredCacheVersion();
 
         $revalidate = $this->notifyNextRevalidate($revalidatePayload);
 

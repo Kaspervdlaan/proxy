@@ -65,6 +65,8 @@ class CvControllerTest extends TestCase
                 ->andReturn('200');
             $mock->shouldReceive('invalidateStoryContentCacheBySlug')
                 ->once();
+            $mock->shouldReceive('clearStoredCacheVersion')
+                ->once();
         });
 
         $response = $this->postJson('/api/cv/cache/clear');
@@ -92,6 +94,8 @@ class CvControllerTest extends TestCase
             $mock->shouldReceive('invalidateStoryContentCacheBySlug')
                 ->once()
                 ->with('about');
+            $mock->shouldReceive('clearStoredCacheVersion')
+                ->once();
         });
 
         $response = $this->postJson('/api/cv/cache/clear', [
@@ -118,6 +122,8 @@ class CvControllerTest extends TestCase
             $mock->shouldReceive('invalidateStoryContentCacheBySlug')
                 ->once()
                 ->with('profile/jane-doe');
+            $mock->shouldReceive('clearStoredCacheVersion')
+                ->once();
         });
 
         $response = $this->postJson('/api/storyblok/webhook', [

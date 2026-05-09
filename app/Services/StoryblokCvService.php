@@ -161,6 +161,11 @@ class StoryblokCvService
         $this->removeSlugFromRegistry($normalizedSlug);
     }
 
+    public function clearStoredCacheVersion(): void
+    {
+        Cache::forget($this->cacheVersionKey());
+    }
+
     private function storeCacheVersion(string $cv): void
     {
         Cache::forever($this->cacheVersionKey(), $cv);
