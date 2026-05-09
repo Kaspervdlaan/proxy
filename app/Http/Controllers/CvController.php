@@ -32,18 +32,38 @@ class CvController extends Controller
         ]);
     }
 
-    public function clear(): JsonResponse
+    public function clear(Request $request): JsonResponse
     {
+        $requestPayload = $request->json()->all();
+        $requestedInvalidate = (string) ($request->input('invalidate') ?? Arr::get($requestPayload, 'invalidate', ''));
+        $requestedSlug = trim((string) ($request->input('slug') ?? Arr::get($requestPayload, 'slug', '')), '/');
+        $requestedPath = (string) ($request->input('path') ?? Arr::get($requestPayload, 'path', ''));
+        $resolvedPath = $this->resolveInvalidationPath($requestedPath, $requestedSlug);
+        $invalidateScope = $requestedInvalidate === 'path' || $resolvedPath !== null ? 'path' : 'global';
+
         $cv = $this->storyblokCvService->refreshLatestCacheVersion();
-        $revalidate = $this->notifyNextRevalidate([
+        $revalidatePayload = [
             'source' => 'manual-cache-clear',
-            'invalidate' => 'global',
+            'invalidate' => $invalidateScope,
             'cv' => $cv,
-        ]);
+        ];
+
+        if ($requestedSlug !== '') {
+            $revalidatePayload['slug'] = $requestedSlug;
+        }
+
+        if ($resolvedPath !== null) {
+            $revalidatePayload['path'] = $resolvedPath;
+        }
+
+        $revalidate = $this->notifyNextRevalidate($revalidatePayload);
 
         return response()->json([
             'message' => 'Cache version refreshed and Next revalidation requested.',
             'cv' => $cv,
+            'invalidate' => $invalidateScope,
+            'slug' => $requestedSlug !== '' ? $requestedSlug : null,
+            'path' => $resolvedPath,
             'next' => $revalidate,
         ]);
     }
@@ -70,22 +90,34 @@ class CvController extends Controller
         $action = (string) Arr::get($payload, 'action', 'unknown');
         $fullSlug = trim((string) Arr::get($payload, 'story.full_slug', ''), '/');
         $slug = $fullSlug !== '' ? $fullSlug : (string) config('services.storyblok.root_slug', 'home');
+        $requestedInvalidate = (string) Arr::get($payload, 'invalidate', 'path');
+        $requestedPath = (string) Arr::get($payload, 'path', '');
+        $resolvedPath = $this->resolveInvalidationPath($requestedPath, $slug);
+        $invalidateScope = $requestedInvalidate === 'global' ? 'global' : 'path';
 
         $cv = $this->storyblokCvService->refreshLatestCacheVersion();
-        $revalidate = $this->notifyNextRevalidate([
+        $revalidatePayload = [
             'source' => 'storyblok-webhook',
             'action' => $action,
             'slug' => $slug,
-            'invalidate' => 'global',
+            'invalidate' => $invalidateScope,
             'cv' => $cv,
             'space_id' => Arr::get($payload, 'space_id'),
-        ]);
+        ];
+
+        if ($resolvedPath !== null) {
+            $revalidatePayload['path'] = $resolvedPath;
+        }
+
+        $revalidate = $this->notifyNextRevalidate($revalidatePayload);
 
         return response()->json([
             'message' => 'Webhook accepted.',
             'action' => $action,
             'slug' => $slug,
             'cv' => $cv,
+            'invalidate' => $invalidateScope,
+            'path' => $resolvedPath,
             'next' => $revalidate,
         ]);
     }
@@ -100,6 +132,52 @@ class CvController extends Controller
         }
 
         return $normalized;
+    }
+
+    private function resolveInvalidationPath(string $path, string $slug): ?string
+    {
+        $normalizedPath = $this->normalizePath($path);
+
+        if ($normalizedPath !== null) {
+            return $normalizedPath;
+        }
+
+        $normalizedSlug = trim($slug, '/');
+
+        if ($normalizedSlug === '') {
+            return null;
+        }
+
+        return $this->pathFromSlug($normalizedSlug);
+    }
+
+    private function normalizePath(string $path): ?string
+    {
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (! str_starts_with($trimmed, '/')) {
+            $trimmed = '/'.$trimmed;
+        }
+
+        $normalized = '/'.trim($trimmed, '/');
+
+        return $normalized === '/' ? '/' : rtrim($normalized, '/');
+    }
+
+    private function pathFromSlug(string $slug): string
+    {
+        $normalizedSlug = trim($slug, '/');
+        $rootSlug = trim((string) config('services.storyblok.root_slug', 'home'), '/');
+
+        if ($normalizedSlug === '' || $normalizedSlug === 'home' || ($rootSlug !== '' && $normalizedSlug === $rootSlug)) {
+            return '/';
+        }
+
+        return '/'.$normalizedSlug;
     }
 
     private function notifyNextRevalidate(array $payload): array
