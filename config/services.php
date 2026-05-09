@@ -41,7 +41,6 @@ return [
         'root_slug' => env('STORYBLOK_ROOT_SLUG', ''),
         'cv_slug' => env('STORYBLOK_CV_SLUG', 'cv'),
         'version' => env('STORYBLOK_VERSION', 'published'),
-        'cache_ttl_seconds' => (int) env('CV_CACHE_TTL_SECONDS', 900),
         'cache_version_key' => env('STORYBLOK_CACHE_VERSION_KEY', 'storyblok:cv:latest'),
         'next_revalidate_url' => env('NEXT_REVALIDATE_URL', ''),
     ],
