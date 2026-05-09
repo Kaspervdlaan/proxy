@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class StoryblokCvService
 {
-    public function fetchStory(string $slug): array
+    public function fetchStoryWithCacheVersion(string $slug): array
     {
         $token = (string) config('services.storyblok.api_token');
 
@@ -18,13 +19,20 @@ class StoryblokCvService
 
         $base = rtrim((string) config('services.storyblok.api_base'), '/');
         $version = (string) config('services.storyblok.version');
+        $storedCv = $this->getStoredCacheVersion();
+
+        $query = [
+            'token' => $token,
+            'version' => $version,
+        ];
+
+        if ($storedCv !== null) {
+            $query['cv'] = $storedCv;
+        }
 
         $response = Http::timeout(10)
             ->acceptJson()
-            ->get("{$base}/stories/{$slug}", [
-                'token' => $token,
-                'version' => $version,
-            ]);
+            ->get("{$base}/stories/{$slug}", $query);
 
         if ($response->failed()) {
             throw new RuntimeException('Storyblok request failed with status '.$response->status());
@@ -37,32 +45,73 @@ class StoryblokCvService
             throw new RuntimeException('Storyblok response does not include story data.');
         }
 
-        return $story;
-    }
+        $latestCv = Arr::get($payload, 'cv');
+        $latestCvValue = is_scalar($latestCv) ? (string) $latestCv : null;
 
-    public function renderHtml(array $story): string
-    {
-        $name = (string) Arr::get($story, 'name', 'CV');
-        $content = Arr::get($story, 'content', []);
-
-        if (is_array($content)) {
-            $candidates = [
-                Arr::get($content, 'cv_html'),
-                Arr::get($content, 'html'),
-                Arr::get($content, 'content'),
-            ];
-
-            foreach ($candidates as $candidate) {
-                if (is_string($candidate) && trim($candidate) !== '') {
-                    return $candidate;
-                }
-            }
+        if ($latestCvValue !== null && $latestCvValue !== '') {
+            $this->storeCacheVersion($latestCvValue);
         }
 
-        return sprintf(
-            '<article><h1>%s</h1><pre>%s</pre></article>',
-            e($name),
-            e(json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}')
-        );
+        return [
+            'story' => $story,
+            'cv_used' => $storedCv,
+            'cv_latest' => $latestCvValue,
+        ];
+    }
+
+    public function refreshLatestCacheVersion(): string
+    {
+        $token = (string) config('services.storyblok.api_token');
+
+        if ($token === '') {
+            throw new RuntimeException('STORYBLOK_API_TOKEN is not configured.');
+        }
+
+        $base = rtrim((string) config('services.storyblok.api_base'), '/');
+
+        $response = Http::timeout(10)
+            ->acceptJson()
+            ->get("{$base}/spaces/me", [
+                'token' => $token,
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException('Unable to fetch Storyblok cache version (status '.$response->status().').');
+        }
+
+        $payload = $response->json();
+        $version = Arr::get($payload, 'space.version');
+        $cv = is_scalar($version) ? (string) $version : '';
+
+        if ($cv === '') {
+            throw new RuntimeException('Storyblok spaces endpoint did not return a cache version.');
+        }
+
+        $this->storeCacheVersion($cv);
+
+        return $cv;
+    }
+
+    public function getStoredCacheVersion(): ?string
+    {
+        $value = Cache::get($this->cacheVersionKey());
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $cv = (string) $value;
+
+        return $cv === '' ? null : $cv;
+    }
+
+    private function storeCacheVersion(string $cv): void
+    {
+        Cache::forever($this->cacheVersionKey(), $cv);
+    }
+
+    private function cacheVersionKey(): string
+    {
+        return (string) config('services.storyblok.cache_version_key', 'storyblok:cv:latest');
     }
 }

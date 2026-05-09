@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: laravel-proxy
     restart: unless-stopped
+    ports:
+      - "${LARAVEL_PROXY_PORT:-8000}:8000"
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
@@ -14,6 +16,8 @@ services:
       STORYBLOK_VERSION: ${STORYBLOK_VERSION:-published}
       CV_CACHE_TTL_SECONDS: ${CV_CACHE_TTL_SECONDS:-900}
       CV_CACHE_BUST_TOKEN: ${CV_CACHE_BUST_TOKEN:-}
+      STORYBLOK_CACHE_VERSION_KEY: ${STORYBLOK_CACHE_VERSION_KEY:-storyblok:cv:latest}
+      NEXT_REVALIDATE_URL: ${NEXT_REVALIDATE_URL:-http://host.docker.internal:3001/api/revalidate}
     healthcheck:
       test: ["CMD", "php", "-r", "exit((int)!@file_get_contents('http://127.0.0.1:8000/api/health'));" ]
       interval: 15s

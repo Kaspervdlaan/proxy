@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\StoryblokCvService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -17,79 +19,75 @@ class CvController extends Controller
     public function show(): JsonResponse
     {
         $slug = $this->resolveSlug();
-        $ttlSeconds = max((int) config('services.storyblok.cache_ttl_seconds', 900), 30);
-        $cacheKey = $this->cacheKey($slug);
-
-        $fromCache = Cache::has($cacheKey);
-
-        $result = Cache::remember($cacheKey, now()->addSeconds($ttlSeconds), function () use ($slug) {
-            $story = $this->storyblokCvService->fetchStory($slug);
-
-            return [
-                'slug' => $slug,
-                'story' => $story,
-                'fetched_at' => now()->toIso8601String(),
-            ];
-        });
+        $result = $this->storyblokCvService->fetchStoryWithCacheVersion($slug);
 
         return response()->json([
-            ...$result,
-            'cache' => [
-                'hit' => $fromCache,
-                'ttl_seconds' => $ttlSeconds,
+            'slug' => $slug,
+            'story' => Arr::get($result, 'story'),
+            'cv' => [
+                'used' => Arr::get($result, 'cv_used'),
+                'latest' => Arr::get($result, 'cv_latest'),
             ],
+            'fetched_at' => now()->toIso8601String(),
         ]);
     }
 
     public function clear(): JsonResponse
     {
-        $token = (string) env('CV_CACHE_BUST_TOKEN', '');
-        $provided = (string) request()->header('X-Cache-Bust-Token', '');
-
-        if ($token === '' || ! hash_equals($token, $provided)) {
-            return response()->json([
-                'message' => 'Unauthorized cache bust request.',
-            ], 401);
-        }
-
-        $slug = $this->resolveSlug();
-        Cache::forget($this->cacheKey($slug));
+        $cv = $this->storyblokCvService->refreshLatestCacheVersion();
+        $revalidate = $this->notifyNextRevalidate([
+            'source' => 'manual-cache-clear',
+            'invalidate' => 'global',
+            'cv' => $cv,
+        ]);
 
         return response()->json([
-            'message' => 'Story cache cleared.',
-            'slug' => $slug,
+            'message' => 'Cache version refreshed and Next revalidation requested.',
+            'cv' => $cv,
+            'next' => $revalidate,
         ]);
     }
 
     public function staleSafe(): JsonResponse
     {
-        $slug = $this->resolveSlug();
-        $cacheKey = $this->cacheKey($slug);
-
         try {
             return $this->show();
         } catch (Throwable $exception) {
-            Log::warning('Serving stale story cache after Storyblok fetch failure.', [
+            Log::warning('Story fetch failed and no JSON cache fallback is configured.', [
                 'exception' => $exception->getMessage(),
-                'slug' => $slug,
+                'slug' => $this->resolveSlug(),
             ]);
 
-            if (! Cache::has($cacheKey)) {
-                return response()->json([
-                    'message' => 'Unable to fetch story and no cache is available.',
-                ], 502);
-            }
-
-            $result = Cache::get($cacheKey);
-
             return response()->json([
-                ...$result,
-                'cache' => [
-                    'hit' => true,
-                    'stale' => true,
-                ],
-            ], 200);
+                'message' => 'Unable to fetch story from Storyblok.',
+            ], 502);
         }
+    }
+
+    public function webhook(Request $request): JsonResponse
+    {
+        $payload = $request->json()->all();
+        $action = (string) Arr::get($payload, 'action', 'unknown');
+        $fullSlug = trim((string) Arr::get($payload, 'story.full_slug', ''), '/');
+        $slug = $fullSlug !== '' ? $fullSlug : (string) config('services.storyblok.root_slug', 'home');
+
+        $cv = $this->storyblokCvService->refreshLatestCacheVersion();
+        $revalidate = $this->notifyNextRevalidate([
+            'source' => 'storyblok-webhook',
+            'action' => $action,
+            'slug' => $slug,
+            'invalidate' => 'global',
+            'cv' => $cv,
+            'space_id' => Arr::get($payload, 'space_id'),
+        ]);
+
+        return response()->json([
+            'message' => 'Webhook accepted.',
+            'action' => $action,
+            'slug' => $slug,
+            'cv' => $cv,
+            'next' => $revalidate,
+        ]);
     }
 
     private function resolveSlug(): string
@@ -104,8 +102,38 @@ class CvController extends Controller
         return $normalized;
     }
 
-    private function cacheKey(string $slug): string
+    private function notifyNextRevalidate(array $payload): array
     {
-        return 'story:json:'.$slug;
+        $url = (string) config('services.storyblok.next_revalidate_url', '');
+
+        if ($url === '') {
+            return [
+                'requested' => false,
+                'reason' => 'NEXT_REVALIDATE_URL is not configured.',
+            ];
+        }
+
+        try {
+            $request = Http::timeout(5)->acceptJson();
+
+            $response = $request->post($url, $payload);
+
+            return [
+                'requested' => true,
+                'status' => $response->status(),
+                'ok' => $response->successful(),
+            ];
+        } catch (Throwable $exception) {
+            Log::warning('Failed to call Next revalidation endpoint.', [
+                'exception' => $exception->getMessage(),
+                'url' => $url,
+            ]);
+
+            return [
+                'requested' => true,
+                'ok' => false,
+                'error' => $exception->getMessage(),
+            ];
+        }
     }
 }

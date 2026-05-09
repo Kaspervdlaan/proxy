@@ -10,6 +10,7 @@ Route::get('/health', fn () => response()->json([
 
 Route::get('/story', [CvController::class, 'staleSafe']);
 Route::post('/story/cache/clear', [CvController::class, 'clear']);
+Route::post('/storyblok/webhook', [CvController::class, 'webhook']);
 
 Route::get('/cv', [CvController::class, 'staleSafe']);
 Route::post('/cv/cache/clear', [CvController::class, 'clear']);

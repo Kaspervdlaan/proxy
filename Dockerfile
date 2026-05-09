@@ -14,6 +14,8 @@ RUN apt-get update \
 COPY --from=vendor /app/vendor ./vendor
 COPY . .
 
+RUN rm -f bootstrap/cache/*.php
+
 RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
