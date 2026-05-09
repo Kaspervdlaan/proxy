@@ -38,7 +38,7 @@ class CvController extends Controller
         $requestedSlug = trim((string) ($request->input('slug') ?? Arr::get($requestPayload, 'slug', '')), '/');
         $slug = $requestedSlug !== ''
             ? $requestedSlug
-            : trim((string) config('services.storyblok.root_slug', 'home'), '/');
+            : $this->resolveRootSlug();
 
         $cv = $this->storyblokCvService->refreshLatestCacheVersion();
         $revalidatePayload = [
@@ -82,7 +82,7 @@ class CvController extends Controller
         $payload = $request->json()->all();
         $action = (string) Arr::get($payload, 'action', 'unknown');
         $fullSlug = trim((string) Arr::get($payload, 'story.full_slug', ''), '/');
-        $slug = $fullSlug !== '' ? $fullSlug : (string) config('services.storyblok.root_slug', 'home');
+        $slug = $fullSlug !== '' ? $fullSlug : $this->resolveRootSlug();
 
         $cv = $this->storyblokCvService->refreshLatestCacheVersion();
         $revalidatePayload = [
@@ -114,10 +114,17 @@ class CvController extends Controller
         $normalized = trim($slug, '/');
 
         if ($normalized === '') {
-            return (string) config('services.storyblok.root_slug', 'home');
+            return $this->resolveRootSlug();
         }
 
         return $normalized;
+    }
+
+    private function resolveRootSlug(): string
+    {
+        $rootSlug = trim((string) config('services.storyblok.root_slug', 'home'), '/');
+
+        return $rootSlug !== '' ? $rootSlug : 'home';
     }
 
     private function notifyNextRevalidate(array $payload): array
