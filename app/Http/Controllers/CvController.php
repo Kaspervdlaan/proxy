@@ -86,7 +86,7 @@ class CvController extends Controller
     {
         $payload = $request->json()->all();
         $action = (string) Arr::get($payload, 'action', 'unknown');
-        $fullSlug = trim((string) Arr::get($payload, 'story.full_slug', ''), '/');
+        $fullSlug = trim((string) (Arr::get($payload, 'full_slug', Arr::get($payload, 'story.full_slug', ''))), '/');
         $slug = $fullSlug !== '' ? $fullSlug : $this->resolveRootSlug();
 
         $cv = $this->storyblokCvService->refreshLatestCacheVersion();

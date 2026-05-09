@@ -145,4 +145,37 @@ class CvControllerTest extends TestCase
                 ],
             ]);
     }
+
+    public function test_webhook_endpoint_uses_top_level_full_slug_when_present(): void
+    {
+        config(['services.storyblok.next_revalidate_url' => '']);
+
+        $this->mock(StoryblokCvService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('refreshLatestCacheVersion')
+                ->once()
+                ->andReturn('301');
+            $mock->shouldReceive('invalidateStoryContentCacheBySlug')
+                ->once()
+                ->with('about');
+            $mock->shouldReceive('clearStoredCacheVersion')
+                ->once();
+        });
+
+        $response = $this->postJson('/api/storyblok/webhook', [
+            'action' => 'published',
+            'full_slug' => 'about',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJson([
+                'action' => 'published',
+                'slug' => 'about',
+                'cv' => '301',
+                'invalidate' => 'slug',
+                'next' => [
+                    'requested' => false,
+                ],
+            ]);
+    }
 }
