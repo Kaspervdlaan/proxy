@@ -42,6 +42,10 @@ return [
         'cv_slug' => env('STORYBLOK_CV_SLUG', 'cv'),
         'version' => env('STORYBLOK_VERSION', 'published'),
         'cache_version_key' => env('STORYBLOK_CACHE_VERSION_KEY', 'storyblok:cv:latest'),
+        'content_cache_prefix' => env('STORYBLOK_CONTENT_CACHE_PREFIX', 'storyblok:story'),
+        'content_cache_ttl_seconds' => (int) env('STORYBLOK_CONTENT_CACHE_TTL_SECONDS', 300),
+        'stale_cache_ttl_seconds' => (int) env('STORYBLOK_STALE_CACHE_TTL_SECONDS', 86400),
+        'serve_stale_on_error' => filter_var(env('STORYBLOK_SERVE_STALE_ON_ERROR', true), FILTER_VALIDATE_BOOL),
         'next_revalidate_url' => env('NEXT_REVALIDATE_URL', ''),
     ],
 

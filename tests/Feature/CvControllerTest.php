@@ -63,6 +63,8 @@ class CvControllerTest extends TestCase
             $mock->shouldReceive('refreshLatestCacheVersion')
                 ->once()
                 ->andReturn('200');
+            $mock->shouldReceive('invalidateStoryContentCacheBySlug')
+                ->once();
         });
 
         $response = $this->postJson('/api/cv/cache/clear');
@@ -71,9 +73,37 @@ class CvControllerTest extends TestCase
             ->assertOk()
             ->assertJson([
                 'cv' => '200',
+                'invalidate' => 'slug',
+                'slug' => 'home',
                 'next' => [
                     'requested' => false,
                 ],
+            ]);
+    }
+
+    public function test_clear_endpoint_invalidates_backend_slug_when_slug_provided(): void
+    {
+        config(['services.storyblok.next_revalidate_url' => '']);
+
+        $this->mock(StoryblokCvService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('refreshLatestCacheVersion')
+                ->once()
+                ->andReturn('210');
+            $mock->shouldReceive('invalidateStoryContentCacheBySlug')
+                ->once()
+                ->with('about');
+        });
+
+        $response = $this->postJson('/api/cv/cache/clear', [
+            'slug' => 'about',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJson([
+                'cv' => '210',
+                'invalidate' => 'slug',
+                'slug' => 'about',
             ]);
     }
 
@@ -85,6 +115,9 @@ class CvControllerTest extends TestCase
             $mock->shouldReceive('refreshLatestCacheVersion')
                 ->once()
                 ->andReturn('300');
+            $mock->shouldReceive('invalidateStoryContentCacheBySlug')
+                ->once()
+                ->with('profile/jane-doe');
         });
 
         $response = $this->postJson('/api/storyblok/webhook', [
@@ -100,6 +133,7 @@ class CvControllerTest extends TestCase
                 'action' => 'published',
                 'slug' => 'profile/jane-doe',
                 'cv' => '300',
+                'invalidate' => 'slug',
                 'next' => [
                     'requested' => false,
                 ],
